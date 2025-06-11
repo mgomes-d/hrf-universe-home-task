@@ -1,5 +1,4 @@
-version: '3.1'
-
+statu
 services:
   postgres:
     container_name: hrf_universe_postgres
@@ -10,5 +9,7 @@ services:
       POSTGRES_DB: home_task
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: adm1n_password
+    volumes:
+      - ./migrations/data:/tmp/data
     ports:
       - 5432:5432

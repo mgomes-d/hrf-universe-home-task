@@ -22,16 +22,17 @@ def get_row_stmt(job_id, jobs, country):
         id=str(uuid.uuid4()),
         country_code=str(country),
         standard_job_id=str(job_id),
-        avg_days="{:.1f}".format(np.average(filtered)),
-        min_days="{:.1f}".format(p10),
-        max_days="{:.1f}".format(p90),
+        avg_days= round(np.average(filtered), 1),
+        min_days=round(np.average(p10), 1),
+        max_days=round(np.average(p90), 1),
         job_postings_number=int(len(jobs))
     )
     return insert_stmt
-def main(min_job_postings_threshold: bool=True):
+def main(min_job_postings_threshold: int=5):
     engine = create_engine(DATABASE)
 
     Session = sessionmaker(bind=engine)
+    
 
     country_values_stmt = select(JobPosting).where(
         and_(
@@ -54,7 +55,7 @@ def main(min_job_postings_threshold: bool=True):
         for country in grouped_values:
             ## group by country and jobs
             for job_id, jobs in grouped_values[country].items():
-                if min_job_postings_threshold is True and len(jobs) < 5:
+                if len(jobs) < min_job_postings_threshold:
                     continue
                 session.add(get_row_stmt(
                     job_id=job_id,

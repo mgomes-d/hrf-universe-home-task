@@ -1,0 +1,16 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Debug with Conda",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}", // The file you want to debug
+            "console": "integratedTerminal",
+            "pythonPath": "/goinfre/mgomes-d/miniconda3/envs/42AI-mgomes-d/bin/python" // Replace with your Conda environment's Python path
+        }
+    ]
+}
