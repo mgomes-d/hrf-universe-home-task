@@ -5,7 +5,7 @@ from sqlalchemy import delete
 from sqlalchemy import and_
 
 import uuid
-
+from db import get_session
 import numpy as np
 from models import JobPosting, Statistics
 from collections import defaultdict
@@ -22,17 +22,13 @@ def get_row_stmt(job_id, jobs, country):
         id=str(uuid.uuid4()),
         country_code=str(country),
         standard_job_id=str(job_id),
-        avg_days= round(np.average(filtered), 1),
-        min_days=round(np.average(p10), 1),
-        max_days=round(np.average(p90), 1),
+        avg_days= round(float(np.average(filtered)), 1),
+        min_days=round(float(p10), 1),
+        max_days=round(float(p90), 1),
         job_postings_number=int(len(jobs))
     )
     return insert_stmt
-def main(min_job_postings_threshold: int=5):
-    engine = create_engine(DATABASE)
-
-    Session = sessionmaker(bind=engine)
-    
+def main(min_job_postings_threshold: int=5):    
 
     country_values_stmt = select(JobPosting).where(
         and_(
@@ -45,7 +41,7 @@ def main(min_job_postings_threshold: int=5):
             JobPosting.days_to_hire.isnot(None),
         )
     )
-    with Session() as session:
+    with get_session() as session:
         ## For each country and standard job create a separate row in a table.
         session.execute(delete(Statistics))
         country_values = session.execute(country_values_stmt).scalars().all()
