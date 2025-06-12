@@ -1,16 +1,12 @@
-from sqlalchemy import create_engine
-from sqlalchemy import select
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import delete
-from sqlalchemy import and_
-
+from sqlalchemy import select, delete, and_
+from sqlalchemy.orm import selectinload
 import uuid
 from db import get_session
 import numpy as np
 from models import JobPosting, Statistics
-from collections import defaultdict
+from itertools import groupby
+from operator import attrgetter
 
-DATABASE = "postgresql+psycopg2://admin:adm1n_password@localhost/home_task"
 
 def get_row_stmt(job_id, jobs, country):
     values = [job.days_to_hire for job in jobs]
@@ -18,63 +14,72 @@ def get_row_stmt(job_id, jobs, country):
     p10 = np.percentile(values, 10)
     p90 = np.percentile(values, 90)
     filtered = [value for value in values if p10 <= value <= p90]
-    insert_stmt = Statistics(
+    return Statistics(
         id=str(uuid.uuid4()),
-        country_code=str(country),
-        standard_job_id=str(job_id),
-        avg_days= round(float(np.average(filtered)), 1),
+        country_code=country,
+        standard_job_id=job_id,
+        avg_days=round(float(np.average(filtered)), 1),
         min_days=round(float(p10), 1),
         max_days=round(float(p90), 1),
-        job_postings_number=int(len(jobs))
+        job_postings_number=len(jobs),
     )
-    return insert_stmt
-def main(min_job_postings_threshold: int=5):    
 
-    country_values_stmt = select(JobPosting).where(
-        and_(
-            JobPosting.days_to_hire.isnot(None),
-            JobPosting.country_code.isnot(None)
-        )
-    )
-    all_values_stmt = select(JobPosting).where(
-        and_(
-            JobPosting.days_to_hire.isnot(None),
-        )
-    )
+
+def main(min_job_postings_threshold: int = 5):
     with get_session() as session:
-        ## For each country and standard job create a separate row in a table.
-        session.execute(delete(Statistics))
-        country_values = session.execute(country_values_stmt).scalars().all()
-        grouped_values = defaultdict(lambda: defaultdict(list))
-        for job in country_values:
-            grouped_values[job.country_code][job.standard_job_id].append(job)
-        for country in grouped_values:
-            ## group by country and jobs
-            for job_id, jobs in grouped_values[country].items():
+        try:
+            session.execute(delete(Statistics))
+
+            # 1. Country-level stats
+            country_query = (
+                session.query(
+                    JobPosting.country_code,
+                    JobPosting.standard_job_id,
+                    JobPosting.days_to_hire
+                )
+                .filter(
+                    JobPosting.days_to_hire.isnot(None),
+                    JobPosting.country_code.isnot(None)
+                )
+                .order_by(JobPosting.country_code, JobPosting.standard_job_id)
+                .execution_options(stream_results=True)
+                .yield_per(1000)
+            )
+
+            key_fn = attrgetter("country_code", "standard_job_id")
+
+            for (country, job_id), group in groupby(country_query, key=key_fn):
+                jobs = list(group)
                 if len(jobs) < min_job_postings_threshold:
                     continue
-                session.add(get_row_stmt(
-                    job_id=job_id,
-                    jobs=jobs,
-                    country=country
-                ))
+                session.add(get_row_stmt(job_id, jobs, country))
 
-        ## world per standard job || country value in a world will be None
-        all_values = session.execute(all_values_stmt).scalars().all()
-        world_values = defaultdict(list)
-        for job in all_values:
-            world_values[job.standard_job_id].append(job)
-        
-        for job_id, jobs in world_values.items():
-            if min_job_postings_threshold is True and len(jobs) < 5:
+            # 2. World-level stats
+            world_query = (
+                session.query(
+                    JobPosting.standard_job_id,
+                    JobPosting.days_to_hire
+                )
+                .filter(JobPosting.days_to_hire.isnot(None))
+                .order_by(JobPosting.standard_job_id)
+                .execution_options(stream_results=True)
+                .yield_per(1000)
+            )
+
+            world_key_fn = attrgetter("standard_job_id")
+
+            for job_id, group in groupby(world_query, key=world_key_fn):
+                jobs = list(group)
+                if len(jobs) < min_job_postings_threshold:
                     continue
-            session.add(get_row_stmt(
-                    job_id=job_id,
-                    jobs=jobs,
-                    country=None
-                ))
+                session.add(get_row_stmt(job_id, jobs, country=None))
 
-        session.commit()
+            session.commit()
+
+        except Exception:
+            session.rollback()
+            raise
+
 
 if __name__ == "__main__":
     main()
