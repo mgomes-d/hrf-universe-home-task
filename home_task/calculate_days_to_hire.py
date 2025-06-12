@@ -1,5 +1,4 @@
-from sqlalchemy import select, delete, and_
-from sqlalchemy.orm import selectinload
+from sqlalchemy import delete
 import uuid
 from db import get_session
 import numpy as np
