@@ -6,6 +6,7 @@ import numpy as np
 from models import JobPosting, Statistics
 from itertools import groupby
 from operator import attrgetter
+import argparse
 
 
 def get_row_stmt(job_id, jobs, country):
@@ -82,4 +83,7 @@ def main(min_job_postings_threshold: int = 5):
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--threshold", type=int, default=5)
+    args = parser.parse_args()
+    main(min_job_postings_threshold=args.threshold)
